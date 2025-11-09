@@ -1,0 +1,143 @@
+---
+title: "selma: smooth relative SELectivity curves using weighted polynomial basis via Model Averaging"
+subtitle: "Example of catch comparison analysis in Milanelli et al., Pearnet performance[...]"
+date:   "October, 2025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+```
+
+
+### Initials
+
+The following packages are required to run the analysis:
+
+```{r library, include=TRUE,message=FALSE}
+library(data.table)
+library(ggplot2)
+library(MuMIn)
+library(doParallel)
+library(foreach)
+```
+
+source the selma functions that are required to replicate the (catch comparison) analysis in  Milanelli et al
+
+```{r selmafuns, include=FALSE,message=FALSE}
+lapply(grep("funs",list.files()), function(i) source(list.files()[i],echo=FALSE))
+```
+
+
+load plaice **PLE** example data, 
+
+```{r load data, include=TRUE}
+
+PLE<-fread("./data/PLE.csv")
+
+```
+
+
+
+The data structure in `PLE` is
+
+ 
+```{r structure data, include=TRUE}
+
+str(PLE)
+
+```
+
+where
+  + **haul** =  Primary Sampling Unit (in the manuscript referred to as deployment)
+  + **string** =  Second Sampling Unit nested within haul
+  + **n_1** = counts of measured fish at length `l` in the Pearlnet
+  + **l** =  length classes observed in catches
+  + **n_1** = counts of measured fish at length `l` in the Pearlnet
+  + **n_2** = counts of measured fish at length `l`  in the standard net
+  + **q_1** and **q_2** = raising factors for `n_1` and `n_2`, respectively
+
+
+The function with model-averaging and bootstrap capabilities is named `selma_boot()` and can be called from the workspace. It requires the following arguments:
+
+  + **DT_in** = input catch data. Here `PLE`
+  + **lengthRange** = minimum and maximum lengths in the data set to be used in the analysis, normally lengthRange= the range in the data.
+  + **typePredict** = which type of prediction should the model provide. Use `response` as default. 
+  + **ranking**= criteria for model averaging, use `AICc` as default.
+  + **sampler**= resampling scheme used for the bootstrap distribution generation
+  + **exportfuns**=c(`pooldata`,`selma`) only needed for windows machines. 
+  + **ncores** = number of cores of the computer allocated for paralellization.
+  + **B**= number of bootstrap iterations.Use `B=1000` as default.
+
+To run the analysis, use the following chunk (be aware that it will take some time to get an output:
+
+```{r model, include=FALSE, eval=TRUE}
+
+mod_ple <- readRDS(file="./data/mod_ple.rds")
+
+```
+
+```{r analysis trawl, include=TRUE, eval=FALSE}
+
+mod_ple<- selma_boot(DT_in = PLE,
+                             lengthRange=c(19,45),
+                             typePredict="response",
+                             ranking="AICc",
+                             sampler="bootsamplerGN",
+                             exportfuns=c("pooldata","selma"),
+                             ncores=4,
+                             B=1000
+                     )
+
+```
+
+The model output is a list of objects including model arguments used, catch data pooled, and model predictions
+
+```{r output model trawl, include=TRUE}
+
+names(mod_ple)
+
+```
+where:
+
+  + **B**= number of bootstrap iterations used.
+  + **dt_out** = input data pooled across Sampling Units for plotting purposes 
+  + **ccl.ci** = catch comparison curve with bootstrap confidence intervals
+  + **crl.ci** = catch ratio curve with bootstrap confidence intervals
+
+The listed objects can be extracted from the model output by a call within double bracket, for example `mod_ple[["ccl.ci"]]`  
+
+To plot the estimated catch comparison curve against the experimental catch comparison data, `ccl.ci` and `dt_out` stored in the model object `mod_ple` need to be used:
+
+```{r ccplot analysis trawl, include=TRUE, eval=TRUE}
+p_cc_ple<-ggplot(data=mod_ple[["ccl.ci"]],aes(x=l))+
+  coord_cartesian(xlim=c(15,50),ylim=c(0,1))+
+  geom_hline(yintercept = 0.5,col="darkgreen")+
+  geom_line( aes(y=mu),col=2,lwd=1.5) + xlab("fish length [cm]") +ylab("catch share in Pearlnet")+
+  geom_ribbon(aes(ymin=lci, ymax=uci), alpha=0.2)+
+  geom_point(data=mod_ple[["dt_out"]],aes(x=l,y=p_l,size=n_l), alpha=.5,col="darkblue")+
+  ggtitle("Pearlnet vs standard net")+
+  theme_minimal()+
+  theme(plot.title = element_text(color="darkgreen", size=14, face="bold"), legend.position="none")
+
+print(p_cc_ple)
+
+```
+
+To plot the catch ratio curve derived from the comparison curve only the object `crl.ci` stored in the model object `mod_ple` needs to be used:
+
+```{r crplot analysis trawl, include=TRUE, eval=TRUE}
+p_cr_ple<-ggplot(data=mod_ple[["crl.ci"]],aes(x=l))+
+  coord_cartesian(xlim=c(15,50),ylim=c(0,3))+
+  geom_hline(yintercept = 1,col="darkblue")+
+  geom_line( aes(y=mu),col=2,lwd=1.5) + xlab("fish length [cm]")  +ylab("Ratio of catches Pearlnet to standard")+
+  geom_ribbon(aes(ymin=lci, ymax=uci), alpha=0.2)+
+  ggtitle("Pearlnet vs standard net")+
+    theme_minimal()+
+  theme(plot.title = element_text(color="darkblue", size=14, face="bold"), legend.position="none")
+
+print(p_cr_ple)
+```
+
+
+

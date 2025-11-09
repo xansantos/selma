@@ -4,82 +4,50 @@ library(ggplot2)
 library(doParallel)
 library(MuMIn)
 
+lapply(grep("funs",list.files()), function(i) source(list.files()[i],echo=TRUE))
 
-#length dependent catch comparison curves for each species (Standardbootstrapping)
-#wichtig: diese 3 Dateien müssen in R eingeladen sein, damit Skript laufen kann
+COD<-fread("./data/COD.csv")
 
-source("/home/santos/Documents/4_PROJECTS/STELLA2/Hannah/2024/glmAVG/F-glmAvg.R")
-source("/home/santos/Documents/4_PROJECTS/STELLA2/Hannah/2024/glmAVG/b-glmAvg.R")
-source("/home/santos/Documents/4_PROJECTS/STELLA2/Hannah/2024/glmAVG/B-glmAvg-doparallel.R")
-
-
-
-# Data processing ---------------------------------------------------------
-
-
-dat_raw <- fread("C:\\Users\\santos\\Nextcloud\\software_transfer\\selma_beta_1\\catch_stat.csv") 
-
-
-summary(dat_raw)
-
-length_columns<-colnames(dat_raw)[grep( "L_",colnames(dat_raw))]
-
-#Haul, Perle, Art bleiben als Zeilen, Länge muss zur Zeile gemacht werden
-dat_long<-melt(data=dat_raw,id.vars=c("Haul","String","Perle","Art"), measure.vars=length_columns,
-     variable.name = "Length", value.name = "n",na.rm = FALSE, variable.factor = FALSE)
-
-#Reference: Standardnetz; Test: Perlennetz
-#wenn Perle =0 dann Referenz; sonst Test
-dat_long[, Net:=ifelse(Perle==0, "Reference", "Test")]
-
-dat_long[, Length:=type.convert(substr(Length, 3, 4), as.is=T)]
-
-dat_wide<-dcast(dat_long, Haul+String+Art+Length~Net, fun.aggregate = sum,value.var ="n")
-
-#Umbenennung der Spaltennamen in Haul, sp, l, n2 & n1
-setnames(dat_wide, c("haul","string","sp","l","n_2","n_1"))
-
-#q1 und q2=1, da die Länge von allen Fischen gemessen wurde
-dat_wide[,':='(n=n_1+n_2, q_1=1, q_2=1)]
-
-#überall, wo Länge = 0 beim Standard- und Perlennetz ist, wird gelöscht
-dat_wide<-dat_wide[n>0]
-
-
-# Catch comparison PLE ----------------------------------------------------
-
-X_ple<-dat_wide[sp=="PLE",.(haul,string,l,n_1,n_2,q_1,q_2)]
-
-X_ple<-setDF(X_ple[order(haul,string,l)])
-
-pooled_ple<-pooldata(X=X_ple)
 
 
 # to run the glms, first source these scripts -----------------------------
 
 
 ## bootstrap model, confidence intervals calculated directly on response values
-mod_ple<- selma_boot(DT_in = X_ple,
-                                         lengthRange=c(19,45),
-                                         typePredict="response",
-                                         ranking="AICc",
-                                         sampler="bootsamplerGN",
-                                         exportfuns=c("pooldata","selma"),
-                                         ncores=4,
-                                         B=1000)
+mod_cod<- selma_boot(DT_in = COD,
+                             lengthRange=c(19,45),
+                             typePredict="response",
+                             ranking="AICc",
+                             sampler="bootsamplerGN",
+                             exportfuns=c("pooldata","selma"),
+                             ncores=4,
+                             B=100
+                     )
+
+mod_ple<- selma_boot(DT_in = PLE,
+                     lengthRange=c(19,45),
+                     typePredict="response",
+                     ranking="AICc",
+                     sampler="bootsamplerGN",
+                     exportfuns=c("pooldata","selma"),
+                     ncores=4,
+                     B=1000
+)
+
+saveRDS(mod_ple,file="./data/mod_ple.rds")
 
 #original ggplot2 plots
 
-p_cc_ple<-ggplot(data=mod_ple[[3]],aes(x=l))+ ylim(0,1)+
+p_cc_cod<-ggplot(data=mod_cod[[3]],aes(x=l))+ ylim(0,1)+
   geom_hline(yintercept = 0.5,col="darkgreen")+
   geom_line( aes(y=mu),col=2,lwd=1.5) + xlab("fish length (cm)") +ylab("catch propotion in pearlnet")+
   geom_ribbon(aes(ymin=lci, ymax=uci), alpha=0.2)+
-  geom_point(data=mod_ple[[2]],aes(x=l,y=p_l,size=n_l), alpha=.5,col="darkblue")+
+  geom_point(data=mod_cod[[2]],aes(x=l,y=p_l,size=n_l), alpha=.5,col="darkblue")+
   #ggtitle("average catch comparison curves of plaice between a standard-gillnet and a pearlnet")+
-  ggtitle("PLE Analysis")+
+  ggtitle("COD Analysis")+
   theme(plot.title = element_text(color="red", size=14, face="bold.italic"))
 
-print(p_cc_ple)
+print(p_cc_cod)
 
 #length dependent catch ratio curve
 

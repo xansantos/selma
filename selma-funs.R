@@ -24,15 +24,7 @@
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
-#X=X_ple
-#ncores=4
-#lengthRange=c(19,45)
-#typePredict="response"
-#Rank="AICc"
-#sampler="bootsamplerGN"
-#exportfuns=c("sampler","pooldata","glmAvg")
-#type_boot="comp"
-#B=100
+
 
 # core selma function
 selma<-function(dt_in,
@@ -63,7 +55,7 @@ selma<-function(dt_in,
   ## vectorized aggregated catch data
   catch <- X[[ "catch" ]]
   
-  ptest <- X[[ "ptest " ]]
+  ptest <- X[[ "ptest" ]]
   
   l <- X[[ "l" ]]
   
@@ -209,7 +201,7 @@ selma_boot<-function(DT_in,
   
   set.seed(999)
   
-  X<-copy(dt_in)
+  X<-copy(DT_in)
   
   # Create and register a cluster that works on any OS
   cl <- makeCluster(ncores)
@@ -224,9 +216,9 @@ selma_boot<-function(DT_in,
     
     if( b > 1)  Xb <- sampler( X ) else Xb <- copy(X)
     
-    Xo <- setDT( pooldata( Xb ) ) 
+    xb <- setDT( pooldata( DT=Xb ) ) 
     
-    tryCatch(suppressWarnings(selma(X = Xo,
+    tryCatch(suppressWarnings(selma(dt_in = xb,
                                     lengthRange = lengthRange,
                                      report = "boot",
                                      ranking = ranking,
@@ -236,7 +228,8 @@ selma_boot<-function(DT_in,
                               ),
              error = function(e) {cat("")})
     
-                                                               }
+               }
+  stopCluster(cl)
   
   
 

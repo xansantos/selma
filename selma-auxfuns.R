@@ -82,9 +82,11 @@ f_bci<-function(x,q){
 }
     
 
-pooldata<-function(X, NA_report=FALSE){
+pooldata<-function(DT, NA_report=FALSE){
   
-  if(is.data.table(X)==TRUE){ stop("***input data is a data.table class***\nplease make a copy of the empirical and data\nconvert it to data.frame object") }
+  X <- copy(DT)
+  
+  setDF(X)
   
   n.cols <- grep("^n_", names(X))
   
